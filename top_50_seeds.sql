@@ -1,0 +1,41 @@
+CREATE TABLE IF NOT EXISTS best_seeds (
+    rank INT,
+    seed BIGINT,
+    desert_to_snow_dist INT,
+    villages INT,
+    unique_villages INT,
+    bonus_points INT,
+    has_mansion BOOLEAN,
+    desert_area INT,
+    snow_area INT,
+    swamp_area INT,
+    savanna_area INT,
+    plains_area INT,
+    taiga_area INT,
+    mushroom_area INT,
+    old_growth_area INT,
+    stony_peaks_area INT,
+    pale_garden_area INT,
+    chunkbase_url TEXT
+);
+
+INSERT INTO best_seeds VALUES (1, 7760656107089942724, 974, 10, 2, 3, True, 5226496, 1179648, 573440, 786432, 2850816, 557056, 16384, 81920, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=7760656107089942724');
+INSERT INTO best_seeds VALUES (2, -7797649234703285377, 1180, 7, 2, 2, False, 2719744, 2785280, 770048, 1146880, 2129920, 1769472, 32768, 147456, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-7797649234703285377');
+INSERT INTO best_seeds VALUES (3, -1221005518233840733, 1267, 14, 2, 1, False, 2031616, 344064, 147456, 1507328, 4014080, 458752, 0, 32768, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-1221005518233840733');
+INSERT INTO best_seeds VALUES (4, -6573366177688202911, 1267, 12, 2, 1, False, 1507328, 1294336, 229376, 1703936, 3948544, 655360, 0, 32768, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-6573366177688202911');
+INSERT INTO best_seeds VALUES (5, -854924085317138445, 1286, 18, 2, 2, False, 1490944, 1179648, 278528, 1769472, 4784128, 491520, 163840, 262144, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-854924085317138445');
+INSERT INTO best_seeds VALUES (6, -3581644841049530548, 1305, 19, 2, 2, True, 131072, 2408448, 131072, 835584, 5439488, 1769472, 0, 245760, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-3581644841049530548');
+INSERT INTO best_seeds VALUES (7, -5568991123871415123, 1305, 9, 2, 1, False, 1982464, 180224, 1622016, 1720320, 3883008, 737280, 0, 180224, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-5568991123871415123');
+INSERT INTO best_seeds VALUES (8, -6572319382267904940, 1317, 17, 2, 2, True, 1851392, 1818624, 589824, 901120, 3670016, 1163264, 0, 360448, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-6572319382267904940');
+INSERT INTO best_seeds VALUES (9, -2965061585628240466, 1360, 6, 2, 1, False, 491520, 1048576, 819200, 671744, 2523136, 1556480, 0, 360448, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-2965061585628240466');
+INSERT INTO best_seeds VALUES (10, 5271657094445842335, 1378, 5, 2, 2, False, 3260416, 491520, 540672, 2457600, 1638400, 720896, 16384, 98304, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=5271657094445842335');
+INSERT INTO best_seeds VALUES (11, 3593553991999792389, 1384, 16, 2, 2, False, 753664, 2424832, 557056, 3047424, 2949120, 983040, 294912, 278528, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=3593553991999792389');
+INSERT INTO best_seeds VALUES (12, -7374745529077801456, 1431, 18, 2, 1, False, 1458176, 1523712, 327680, 933888, 4571136, 1376256, 0, 262144, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-7374745529077801456');
+INSERT INTO best_seeds VALUES (13, 2601753903907769354, 1431, 12, 2, 0, False, 1146880, 573440, 802816, 1835008, 3358720, 245760, 0, 0, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=2601753903907769354');
+INSERT INTO best_seeds VALUES (14, -3431186876852463925, 1448, 10, 2, 3, True, 1081344, 4358144, 16384, 1327104, 1835008, 1359872, 32768, 507904, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-3431186876852463925');
+INSERT INTO best_seeds VALUES (15, 7615211210998032541, 1448, 10, 2, 1, False, 1015808, 3145728, 1114112, 1081344, 3112960, 1474560, 0, 163840, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=7615211210998032541');
+INSERT INTO best_seeds VALUES (16, -7536807933691850816, 1459, 20, 2, 3, True, 1261568, 1032192, 16384, 1097728, 4390912, 1687552, 16384, 360448, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-7536807933691850816');
+INSERT INTO best_seeds VALUES (17, -1403907296345938946, 1459, 17, 2, 2, False, 1998848, 1818624, 376832, 1294336, 3522560, 376832, 49152, 163840, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-1403907296345938946');
+INSERT INTO best_seeds VALUES (18, -6128692446349530934, 1459, 9, 2, 2, False, 393216, 1736704, 442368, 2179072, 3096576, 507904, 16384, 180224, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=-6128692446349530934');
+INSERT INTO best_seeds VALUES (19, 5063074561390722948, 1459, 5, 2, 3, True, 2310144, 376832, 1409024, 1622016, 2375680, 442368, 81920, 16384, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=5063074561390722948');
+INSERT INTO best_seeds VALUES (20, 7873584404553371128, 1498, 22, 2, 2, False, 835584, 2129920, 344064, 2310144, 3833856, 1490944, 114688, 98304, 0, 0, 'https://chunkbase.com/apps/seed-map#seed=7873584404553371128');
