@@ -1,0 +1,4 @@
+- border at 1536 and -1536, both x & y
+- dont leave trees floating.
+- dont build portal, restore ruined portals.
+- keep your time.

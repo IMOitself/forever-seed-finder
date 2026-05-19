@@ -7,16 +7,16 @@ import os
 
 # === ADJUSTABLE VARIABLES ===
 TARGET_SEEDS = 30              
-SEARCH_RADIUS = 3000           # Radius to search for villages and biomes
-GRID_STEP = 128                # Resolution of the biome grid scan (128 is optimal for speed/accuracy)
+SEARCH_RADIUS = 3000           
+GRID_STEP = 128                # Deep scan resolution (Used only for winning seeds)
+FAST_STEP = 256                # Fast scan resolution (Used to quickly eliminate bad seeds)
 
-MIN_UNIQUE_VILLAGE_BIOMES = 2  # Disregards seeds with fewer than this many unique village types
-MIN_TOTAL_VILLAGES = 10         # Minimum total number of villages required in the radius
+MIN_UNIQUE_VILLAGE_BIOMES = 1  
+MIN_TOTAL_VILLAGES = 2         
 
-MAX_DESERT_SNOW_DISTANCE = 1500 # Maximum allowed distance between a Desert and Snowy Plains
-SWAMP_PATH_TOLERANCE = 100      # How far off the direct path the Swamp is allowed to be (in blocks)
+MAX_DESERT_SNOW_DISTANCE = 1250 
+SPAWN_PATH_TOLERANCE = 2000      
 
-# Target unique village biomes
 VILLAGE_BIOMES = {
     "Plains": {1, 177}, 
     "Desert": {2},      
@@ -25,26 +25,76 @@ VILLAGE_BIOMES = {
     "Savanna": {35}     
 }
 
-# 1 Block of scan step represents this much physical block area
 AREA_PER_POINT = GRID_STEP ** 2
 
 def get_distance(p1, p2):
     return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
 def check_seed(seed):
+    # Provides a live feed of what the cores are doing. 
+    # (Uses \r to overwrite lines so it doesn't create thousands of lines of text spam)
+    if seed % 13 == 0: # Throttles the terminal print slightly so it doesn't cause I/O lag
+        sys.stdout.write(f"\033[K[{mp.current_process().name}] Processing seed: {seed}\r")
+        sys.stdout.flush()
+
     g = cb.Generator(cb.MCVersion.MC_1_20, seed, cb.Dimension.DIM_OVERWORLD)
     
+    # ==========================================
+    # PHASE 1: FAST ELIMINATION (Distance Check)
+    # ==========================================
+    desert_points_fast = []
+    snowy_points_fast = []
+    
+    # We use FAST_STEP (256 blocks) to rapidly check if these biomes even exist
+    for x in range(-SEARCH_RADIUS, SEARCH_RADIUS, FAST_STEP):
+        for z in range(-SEARCH_RADIUS, SEARCH_RADIUS, FAST_STEP):
+            b_id = int(cb.get_biome_at(g, x, 64, z))
+            if b_id == 2: desert_points_fast.append((x, z))
+            elif b_id == 12: snowy_points_fast.append((x, z))
+
+    if not desert_points_fast or not snowy_points_fast:
+        return None
+        
+    min_dist = float('inf')
+    best_d = None
+    best_s = None
+    
+    for d in desert_points_fast:
+        for s in snowy_points_fast:
+            dist = get_distance(d, s)
+            if dist < min_dist:
+                min_dist = dist
+                best_d = d
+                best_s = s
+
+    if min_dist > MAX_DESERT_SNOW_DISTANCE or min_dist == float('inf'):
+        return None
+
+    # ==========================================
+    # PHASE 2: TARGETED VILLAGE SEARCH
+    # ==========================================
+    spawn_in_between = False
+    if get_distance(best_d, (0,0)) + get_distance((0,0), best_s) <= min_dist + SPAWN_PATH_TOLERANCE:
+        spawn_in_between = True
+
     found_types = set()
     total_villages = 0
-    region_range = (SEARCH_RADIUS // 512) + 1
     
-    # === 1. VILLAGES ===
-    for rx in range(-region_range, region_range + 1):
-        for rz in range(-region_range, region_range + 1):
+    midpoint = ((best_d[0] + best_s[0]) / 2, (best_d[1] + best_s[1]) / 2)
+    village_search_radius = (min_dist / 2) + 100 
+    
+    # Calculate only the specific regions that overlap our Desert-to-Snow path
+    min_rx = int((midpoint[0] - village_search_radius) // 512) - 1
+    max_rx = int((midpoint[0] + village_search_radius) // 512) + 1
+    min_rz = int((midpoint[1] - village_search_radius) // 512) - 1
+    max_rz = int((midpoint[1] + village_search_radius) // 512) + 1
+    
+    for rx in range(min_rx, max_rx + 1):
+        for rz in range(min_rz, max_rz + 1):
             pos = cb.get_structure_pos(cb.Structure.Village, g, rx, rz)
             if pos:
                 x, z = pos
-                if abs(x) <= SEARCH_RADIUS and abs(z) <= SEARCH_RADIUS:
+                if get_distance((x, z), midpoint) <= village_search_radius:
                     if cb.is_viable_structure_pos(cb.Structure.Village, g, x, z):
                         total_villages += 1
                         biome_id = int(cb.get_biome_at(g, x, 64, z))
@@ -53,74 +103,41 @@ def check_seed(seed):
                                 found_types.add(v_type)
                                 break
                                 
-    # STRICT FILTERS for Villages
     if len(found_types) < MIN_UNIQUE_VILLAGE_BIOMES or total_villages < MIN_TOTAL_VILLAGES:
         return None
 
-    # === 2. BIOME SIZE MEASUREMENT & GRID MAPPING ===
-    desert_points = []
-    snowy_points = []
-    swamp_points = []
-    
-    # Counters for area calculation
+    # ==========================================
+    # PHASE 3: DEEP SCAN (Only runs on winners)
+    # ==========================================
+    # At this point, the seed is virtually guaranteed to be a winner. 
+    # NOW we spend the CPU time to accurately measure the biomes.
     counts = {
         "savanna": 0, "plains": 0, "taiga": 0, 
         "mushroom": 0, "old_growth": 0, "stony_peaks": 0, "pale_garden": 0
     }
     
+    exact_desert_pts = 0
+    exact_snow_pts = 0
+    swamp_points = 0
+    
     for x in range(-SEARCH_RADIUS, SEARCH_RADIUS, GRID_STEP):
         for z in range(-SEARCH_RADIUS, SEARCH_RADIUS, GRID_STEP):
             b_id = int(cb.get_biome_at(g, x, 64, z))
             
-            # Map Pathfinding biomes
-            if b_id == 2: desert_points.append((x, z))
-            elif b_id == 12: snowy_points.append((x, z))
-            elif b_id in {6, 71}: swamp_points.append((x, z)) # Swamp & Mangrove
-            
-            # Count General & Bonus biomes
+            if b_id == 2: exact_desert_pts += 1
+            elif b_id == 12: exact_snow_pts += 1
+            elif b_id in {6, 71}: swamp_points += 1
             elif b_id in {35, 36}: counts["savanna"] += 1
             elif b_id in {1, 177}: counts["plains"] += 1
             elif b_id in {5, 133}: counts["taiga"] += 1
             elif b_id in {14, 15}: counts["mushroom"] += 1
             elif b_id in {32, 33}: counts["old_growth"] += 1
             elif b_id == 76: counts["stony_peaks"] += 1
-            elif b_id == 999: counts["pale_garden"] += 1 # Update with future Pale Garden ID
+            elif b_id == 999: counts["pale_garden"] += 1
 
-    # If missing required biomes entirely, throw out seed
-    if not desert_points or not snowy_points or not swamp_points:
-        return None
-        
-    # === 3. "SWAMP IN BETWEEN" PATHFINDING LOGIC ===
-    ds_pairs = []
-    for d in desert_points:
-        for s in snowy_points:
-            ds_pairs.append((get_distance(d, s), d, s))
-            
-    # Sort pairs to find the absolute shortest desert-to-snow path first
-    ds_pairs.sort(key=lambda x: x[0])
-    
-    min_valid_dist = float('inf')
-    
-    for ds_dist, d, s in ds_pairs:
-        if ds_dist > MAX_DESERT_SNOW_DISTANCE:
-            break # Exceeded our maximum allowed distance, skip remaining
-            
-        if ds_dist > min_valid_dist:
-            break # We already found a closer valid pair
-            
-        # Check if any swamp point lies on the path between this Desert and Snow point
-        for w in swamp_points:
-            # Triangle Inequality: Dist(D,W) + Dist(W,S) should be roughly equal to Dist(D,S)
-            if get_distance(d, w) + get_distance(w, s) <= ds_dist + SWAMP_PATH_TOLERANCE:
-                min_valid_dist = ds_dist
-                break # Valid path found!
-
-    # STRICT FILTER: Disregard if no swamp is between a close desert and snow
-    if min_valid_dist == float('inf'):
-        return None
-
-    # === 4. WOODLAND MANSION (Bonus Structure) ===
+    # Mansion Search (Full map)
     has_mansion = False
+    region_range = (SEARCH_RADIUS // 512) + 1
     for rx in range(-region_range, region_range + 1):
         for rz in range(-region_range, region_range + 1):
             pos = cb.get_structure_pos(cb.Structure.Mansion, g, rx, rz)
@@ -132,11 +149,11 @@ def check_seed(seed):
                         break
         if has_mansion: break
 
-    # === 5. COMPILE SIZES & BONUSES ===
+    # Compile Final Data
     sizes = {
-        "desert": len(desert_points) * AREA_PER_POINT,
-        "snow": len(snowy_points) * AREA_PER_POINT,
-        "swamp": len(swamp_points) * AREA_PER_POINT,
+        "desert": exact_desert_pts * AREA_PER_POINT,
+        "snow": exact_snow_pts * AREA_PER_POINT,
+        "swamp": swamp_points * AREA_PER_POINT,
         "savanna": counts["savanna"] * AREA_PER_POINT,
         "plains": counts["plains"] * AREA_PER_POINT,
         "taiga": counts["taiga"] * AREA_PER_POINT,
@@ -153,34 +170,33 @@ def check_seed(seed):
         1 if counts["stony_peaks"] > 0 else 0,
         1 if counts["pale_garden"] > 0 else 0
     ])
+    
+    if spawn_in_between:
+        plus_points += 5
 
-    return (seed, total_villages, len(found_types), min_valid_dist, plus_points, sizes, has_mansion)
+    return (seed, total_villages, len(found_types), min_dist, plus_points, sizes, has_mansion, spawn_in_between)
 
 def main():
     cores = mp.cpu_count()
-    print(f"Igniting {cores} CPU cores for parallel processing...")
+    print(f"Igniting {cores} CPU cores for parallel processing...\n")
     
     BATCH_SIZE = 1000
-    batches_processed = 0
     found_seeds = []
     
     with mp.Pool(processes=cores) as pool:
         while len(found_seeds) < TARGET_SEEDS:
-            batches_processed += 1
-            total_checked = batches_processed * BATCH_SIZE
-            
-            sys.stdout.write(f"Processing batch {batches_processed*1000} | Good Seeds: {len(found_seeds)}/{TARGET_SEEDS}...\r")
-            sys.stdout.flush()
-            
             seeds_to_check = [random.randint(-2**63, 2**63 - 1) for _ in range(BATCH_SIZE)]
             
             for result in pool.imap_unordered(check_seed, seeds_to_check, chunksize=50):
                 if result:
-                    seed, total_villages, unique_count, min_dist, plus_points, sizes, has_mansion = result
+                    seed, total_villages, unique_count, min_dist, plus_points, sizes, has_mansion, spawn_in_between = result
                     
                     if not any(s[0] == seed for s in found_seeds):
                         found_seeds.append(result)
-                        print(f"\n[+] Match! Seed: {seed:<20} | Dist: {int(min_dist):<4} | Vil: {total_villages:<2} | Bonus: {plus_points}")
+                        spawn_tag = "[Spawn Between!]" if spawn_in_between else ""
+                        
+                        # Use \n to preserve the success line above the live core feed
+                        sys.stdout.write(f"\n[+] Match! Seed: {seed:<20} | Dist: {int(min_dist):<4} | Vil: {total_villages:<2} | Bonus: {plus_points} {spawn_tag}\n")
                         
                     if len(found_seeds) >= TARGET_SEEDS:
                         pool.terminate()
@@ -190,7 +206,6 @@ def main():
                 break
 
     # === RANKING SYSTEM ===
-    # Priority: 1. Distance (Asc) | 2. Villages (Desc) | 3. Bonuses (Desc) | 4. Unique Types (Desc)
     ranked_seeds = sorted(found_seeds, key=lambda x: (x[3], -x[1], -x[4], -x[2]))
 
     print("\n\n" + "="*80)
@@ -199,7 +214,6 @@ def main():
     
     sql_filename = "top_50_seeds.sql"
     with open(sql_filename, "w", encoding="utf-8") as f:
-        # Prepare SQL table with size columns
         f.write("CREATE TABLE IF NOT EXISTS best_seeds (\n")
         f.write("    rank INT,\n")
         f.write("    seed BIGINT,\n")
@@ -207,6 +221,7 @@ def main():
         f.write("    villages INT,\n")
         f.write("    unique_villages INT,\n")
         f.write("    bonus_points INT,\n")
+        f.write("    spawn_in_between BOOLEAN,\n")
         f.write("    has_mansion BOOLEAN,\n")
         f.write("    desert_area INT,\n")
         f.write("    snow_area INT,\n")
@@ -221,19 +236,17 @@ def main():
         f.write("    chunkbase_url TEXT\n")
         f.write(");\n\n")
 
-        for i, (seed, total_villages, unique_count, min_dist, plus_points, sz, has_mansion) in enumerate(ranked_seeds, 1):
+        for i, (seed, total_villages, unique_count, min_dist, plus_points, sz, has_mansion, spawn_in_between) in enumerate(ranked_seeds, 1):
             url = f"https://chunkbase.com/apps/seed-map#seed={seed}"
             
-            # Short console output
-            print(f"#{i:02d} | Dist: {int(min_dist):<4} | Vil: {total_villages:<2} | {url}")
+            print(f"#{i:02d} d: {int(min_dist):<4} | v: {total_villages:<2} | {url}")
             
-            # SQL Insert with explicit sizes
-            f.write(f"INSERT INTO best_seeds VALUES ({i}, {seed}, {int(min_dist)}, {total_villages}, {unique_count}, {plus_points}, {has_mansion}, ")
+            f.write(f"INSERT INTO best_seeds VALUES ({i}, {seed}, {int(min_dist)}, {total_villages}, {unique_count}, {plus_points}, {spawn_in_between}, {has_mansion}, ")
             f.write(f"{sz['desert']}, {sz['snow']}, {sz['swamp']}, {sz['savanna']}, {sz['plains']}, {sz['taiga']}, ")
             f.write(f"{sz['mushroom']}, {sz['old_growth']}, {sz['stony_peaks']}, {sz['pale_garden']}, '{url}');\n")
 
     print("="*80)
-    print(f"✅ Data (including biome sizes) successfully saved to {os.path.abspath(sql_filename)}")
+    print(f"✅ Data successfully saved to {os.path.abspath(sql_filename)}")
 
 if __name__ == "__main__":
     main()
